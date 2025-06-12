@@ -10,11 +10,6 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    env: # Or as an environment variable
-      ORACLE_SSH: ${{ secrets.ORACLE_SSH }}
-      HOST: ${{ secrets.HOST }}
-      KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
-      SSH_KEY_PATH: ${{ github.workspace }}/../private.key
 
     steps:
     - uses: actions/checkout@v4
@@ -23,10 +18,16 @@ jobs:
     - name: make
       run: cmake --build build/
     - name: ssh
+      shell: bash
+      env: # Or as an environment variable
+        ORACLE_SSH: ${{ secrets.ORACLE_SSH }}
+        HOST: ${{ secrets.HOST }}
+        KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        SSH_KEY_PATH: ${{ github.workspace }}/../private.key
       run: |
           mkdir -p ~/.ssh/
           echo "$ORACLE_SSH" > ../private.key
           sudo chmod 600 ../private.key
           echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          scp -i $SSH_KEY_PATH ./build/server opc@144.24.177.91:/server
-          ssh ocp@144.24.177.91 '/server' `</dev/null` >nohup.out 2>&1 &'
+          scp -i $SSH_KEY_PATH ./build/server opc@144.24.177.91:server
+          ssh -i $SSH_KEY_PATH opc@144.24.177.91 'server' `</dev/null` >nohup.out 2>&1 &'
