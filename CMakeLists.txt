@@ -8,5 +8,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(SRCS
     src/main.cpp
 )
+set(SRCS2
+    src/server.cpp
+)
 
 add_executable(philosophers ${SRCS})
+add_executable(server ${SRCS2})
+

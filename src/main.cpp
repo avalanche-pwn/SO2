@@ -39,10 +39,12 @@ private:
   std::condition_variable cond;
   std::queue<std::thread::id> queue;
 };
+
 struct Stick {
   FIFOMutex m;
   Stick() : m() {}
 };
+
 void philosoph(uint64_t id, Stick &l, Stick &r, bool is_last) {
   if (!is_last)
     r.m.lock();

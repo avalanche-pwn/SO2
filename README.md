@@ -18,3 +18,141 @@ Which prevents double eating by single philosopher.
 To achive this I implemented FIFOMutex class which ensures that when multiple
 threads try to acquire a mutex they will be granted access to the resource in
 order.
+
+
+## Multi-threaded Chat Server
+
+A thread-safe TCP chat server implementation in C++ that handles multiple concurrent clients with proper synchronization and resource management.
+
+### Architecture Overview
+
+The server uses a **one-thread-per-client** model where:
+- Main thread accepts incoming connections
+- Each client gets its own dedicated handler thread
+- Shared resources are protected by mutexes and atomic operations
+
+### Thread Safety Strategy
+
+#### Client State Management
+- **Atomic socket descriptors**: `std::atomic<int> socket` prevents race conditions during socket operations
+- **Atomic active flag**: `std::atomic<bool> active` allows safe state checking across threads
+- **Per-client mutexes**: Each client has its own `std::mutex client_mutex` for fine-grained locking
+
+#### Container Safety
+- **std::list instead of vector**: Safer for concurrent iteration (no iterator invalidation on insertion)
+- **Snapshot pattern**: Broadcast operations create local copies of client lists to avoid holding locks during I/O
+- **No runtime removal**: Clients are marked inactive but never removed from containers during operation
+
+#### Key Synchronization Points
+
+##### 1. Client List Access
+```cpp
+std::mutex clients_mutex;  // Protects the main client container
+```
+- Locked when adding new clients
+- Locked when creating snapshots for broadcasting
+- **Not held during I/O operations** to prevent blocking
+
+##### 2. Individual Client Operations
+```cpp
+std::mutex client_mutex;   // Per-client synchronization
+```
+- Protects socket operations (`send`, `recv`)
+- Ensures username updates are atomic
+- Prevents concurrent access to client state
+
+##### 3. Message History
+```cpp
+std::mutex history_mutex;  // Protects chat message history
+```
+- Synchronizes access to shared message buffer
+- Maintains FIFO order for message history
+
+#### Thread Lifecycle Management
+
+##### Client Connection Flow
+1. **Accept**: Main thread accepts connection, creates `Client` object
+2. **Register**: Client added to container under `clients_mutex`
+3. **Spawn**: New thread created for client handling
+4. **Detach**: Thread runs independently with shared_ptr keeping client alive
+
+##### Client Disconnection Flow
+1. **Mark Inactive**: Set `client->active = false` atomically
+2. **Close Socket**: Atomic socket closure prevents further I/O
+3. **Natural Cleanup**: Thread exits naturally, shared_ptr cleans up resources
+
+##### Server Shutdown
+1. **Signal Stop**: Set global `running = false`
+2. **Close Server Socket**: Stops accepting new connections
+3. **Mark All Inactive**: Atomically disable all clients
+4. **Join Threads**: Wait for all client threads to complete
+5. **Clear Containers**: Safe cleanup after all threads finish
+
+### Race Condition Prevention
+
+#### The Iterator Problem
+**Problem**: Removing clients during iteration causes segfaults
+```cpp
+// DANGEROUS - Don't do this
+for (auto& client : clients) {
+    clients.erase(client);  // Iterator invalidation!
+}
+```
+
+**Solution**: Mark inactive, never remove during operation
+```cpp
+client->active.store(false);  // Safe marking
+// Cleanup happens only during shutdown
+```
+
+#### The Broadcast Problem
+**Problem**: Holding mutex during I/O blocks other operations
+```cpp
+// INEFFICIENT - Don't do this
+std::lock_guard<std::mutex> lock(clients_mutex);
+for (auto& client : clients) {
+    send(client->socket, message);  // Holding lock during I/O
+}
+```
+
+**Solution**: Snapshot pattern
+```cpp
+// Create snapshot without holding lock during I/O
+std::vector<std::shared_ptr<Client>> active_clients;
+{
+    std::lock_guard<std::mutex> lock(clients_mutex);
+    // Quick copy of active clients
+    for (const auto& client : clients) {
+        if (client->active.load()) active_clients.push_back(client);
+    }
+}
+// Send messages outside of mutex
+for (const auto& client : active_clients) {
+    safeClientSend(client, message);
+}
+```
+
+#### The Double-Close Problem
+**Problem**: Multiple threads trying to close the same socket
+```cpp
+// DANGEROUS - Race condition
+if (client->socket != -1) {
+    close(client->socket);  // Another thread might close between check and close
+}
+```
+
+**Solution**: Atomic exchange
+```cpp
+int sock = client->socket.load();
+if (sock != -1) {
+    close(sock);
+    client->socket.store(-1);
+}
+```
+
+### Memory Management
+
+- **RAII**: Client destructor automatically closes sockets
+- **shared_ptr**: Automatic cleanup when last reference is dropped
+- **No manual delete**: All cleanup handled by smart pointers and RAII
+
