@@ -25,5 +25,5 @@ jobs:
           mkdir -p ~/.ssh/
           echo "$ORACLE_SSH" > ../private.key
           sudo chmod 600 ../private.key
-          scp ./build/server opc@$HOST:/server
+          scp ./build/server opc@144.24.177.91:/server
           nohup /servert `</dev/null` >nohup.out 2>&1 &
