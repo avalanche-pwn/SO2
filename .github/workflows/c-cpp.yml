@@ -1,0 +1,29 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    env: # Or as an environment variable
+      ORACLE_SSH: ${{ secrets.ORACLE_SSH }}
+      HOST: ${{ secrets.HOST }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: configure
+      run: cmake -B build
+    - name: make
+      run: cmake --build build/
+    - name: ssh
+      run: |
+          mkdir -p ~/.ssh/
+          echo "$ORACLE_SSH" > ../private.key
+          sudo chmod 600 ../private.key
+          scp ./build/server opc@$HOST:/server
+          nohup /servert `</dev/null` >nohup.out 2>&1 &
