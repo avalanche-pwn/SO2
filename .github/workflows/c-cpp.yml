@@ -13,7 +13,8 @@ jobs:
     env: # Or as an environment variable
       ORACLE_SSH: ${{ secrets.ORACLE_SSH }}
       HOST: ${{ secrets.HOST }}
-      KNOWN_HOSTS: $ {{ secrets.KNOWN_HOSTS }}
+      KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+      SSH_KEY_PATH: ${{ github.workspace }}/../private.key
 
     steps:
     - uses: actions/checkout@v4
@@ -27,5 +28,5 @@ jobs:
           echo "$ORACLE_SSH" > ../private.key
           sudo chmod 600 ../private.key
           echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          scp ./build/server opc@144.24.177.91:/server
-          nohup /servert `</dev/null` >nohup.out 2>&1 &
+          scp -i $SSH_KEY_PATH ./build/server opc@144.24.177.91:/server
+          ssh ocp@144.24.177.91 '/server' `</dev/null` >nohup.out 2>&1 &'
