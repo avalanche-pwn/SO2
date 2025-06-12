@@ -47,7 +47,7 @@ The server uses a **one-thread-per-client** model where:
 
 ##### 1. Client List Access
 ```cpp
-std::mutex clients_mutex;  // Protects the main client container
+std::mutex clients_mutex; 
 ```
 - Locked when adding new clients
 - Locked when creating snapshots for broadcasting
@@ -55,7 +55,7 @@ std::mutex clients_mutex;  // Protects the main client container
 
 ##### 2. Individual Client Operations
 ```cpp
-std::mutex client_mutex;   // Per-client synchronization
+std::mutex client_mutex;  
 ```
 - Protects socket operations (`send`, `recv`)
 - Ensures username updates are atomic
@@ -63,7 +63,7 @@ std::mutex client_mutex;   // Per-client synchronization
 
 ##### 3. Message History
 ```cpp
-std::mutex history_mutex;  // Protects chat message history
+std::mutex history_mutex; 
 ```
 - Synchronizes access to shared message buffer
 - Maintains FIFO order for message history
@@ -93,62 +93,18 @@ std::mutex history_mutex;  // Protects chat message history
 #### The Iterator Problem
 **Problem**: Removing clients during iteration causes segfaults
 ```cpp
-// DANGEROUS - Don't do this
+
 for (auto& client : clients) {
-    clients.erase(client);  // Iterator invalidation!
+    clients.erase(client);  
 }
 ```
 
 **Solution**: Mark inactive, never remove during operation
 ```cpp
-client->active.store(false);  // Safe marking
-// Cleanup happens only during shutdown
+client->active.store(false);
+/
 ```
 
-#### The Broadcast Problem
-**Problem**: Holding mutex during I/O blocks other operations
-```cpp
-// INEFFICIENT - Don't do this
-std::lock_guard<std::mutex> lock(clients_mutex);
-for (auto& client : clients) {
-    send(client->socket, message);  // Holding lock during I/O
-}
-```
-
-**Solution**: Snapshot pattern
-```cpp
-// Create snapshot without holding lock during I/O
-std::vector<std::shared_ptr<Client>> active_clients;
-{
-    std::lock_guard<std::mutex> lock(clients_mutex);
-    // Quick copy of active clients
-    for (const auto& client : clients) {
-        if (client->active.load()) active_clients.push_back(client);
-    }
-}
-// Send messages outside of mutex
-for (const auto& client : active_clients) {
-    safeClientSend(client, message);
-}
-```
-
-#### The Double-Close Problem
-**Problem**: Multiple threads trying to close the same socket
-```cpp
-// DANGEROUS - Race condition
-if (client->socket != -1) {
-    close(client->socket);  // Another thread might close between check and close
-}
-```
-
-**Solution**: Atomic exchange
-```cpp
-int sock = client->socket.load();
-if (sock != -1) {
-    close(sock);
-    client->socket.store(-1);
-}
-```
 
 ### Memory Management
 
