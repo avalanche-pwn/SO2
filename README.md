@@ -1,5 +1,20 @@
 # SO2
 
+## Building and running
+
+CMake has been used as a built system, so in order to test the applications you
+need to clone the repository and then compile using cmake.
+
+```bash
+git clone https://github.com/avalanche-pwn/SO2.git
+cmake -B build
+cmake --build build
+```
+
+This will generate two output binaries `build/philosophers` and `build/server`
+which are respectively solutions to the problems presented during university
+course.
+
 ## Dining philosophers problem
 
 In the dining philosophers problem a group of N philosophers is trying to eat.
